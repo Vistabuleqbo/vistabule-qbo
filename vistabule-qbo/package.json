@@ -1,0 +1,8 @@
+{
+  "name": "vistabule-qbo",
+  "version": "1.0.0",
+  "description": "Vistabule Cash Flow Dashboard with QBO integration",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

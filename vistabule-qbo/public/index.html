@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vistabule · Cash Flow Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest:  #2d4a3e;
+    --forest2: #3a5c4f;
+    --cream:   #f5f0e8;
+    --cream2:  #ede8dc;
+    --sand:    #c8b99a;
+    --gold:    #c9a84c;
+    --red:     #b94040;
+    --green:   #3a6e52;
+    --muted:   #7a8a82;
+    --border:  #d4cfc4;
+    --text:    #1e2e28;
+    --mono:    'DM Mono', monospace;
+    --serif:   'DM Serif Display', serif;
+    --sans:    'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ─────────────────────────────────────── */
+  .header {
+    background: var(--forest);
+    color: var(--cream);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.18);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .header-logo { font-family: var(--serif); font-size: 22px; letter-spacing: .02em; }
+  .header-sub  { font-size: 11px; opacity: .6; font-family: var(--mono); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .status-dot  { width: 8px; height: 8px; border-radius: 50%; background: #6dba8a; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .status-label { font-size: 11px; font-family: var(--mono); opacity: .7; }
+  .refresh-btn {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    color: var(--cream);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: background .2s;
+  }
+  .refresh-btn:hover { background: rgba(255,255,255,.2); }
+  .print-btn {
+    background: var(--gold);
+    border: none;
+    color: var(--forest);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: opacity .2s;
+  }
+  .print-btn:hover { opacity: .85; }
+
+  /* ── LAYOUT ─────────────────────────────────────── */
+  .main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 60px; }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--muted);
+    margin: 32px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── KPI ROW ─────────────────────────────────────── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 4px; }
+  .kpi {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background: var(--forest); border-radius: 10px 10px 0 0; }
+  .kpi-label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-family: var(--serif); color: var(--forest); line-height: 1; }
+  .kpi-value.negative { color: var(--red); }
+  .kpi-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── CARDS ─────────────────────────────────────── */
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .card-header {
+    background: var(--cream2);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title { font-weight: 600; font-size: 13px; }
+  .card-body  { padding: 16px 20px; }
+
+  /* ── TABLES ─────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); border-bottom: 2px solid var(--border); }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--cream2); }
+  tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-family: var(--mono); }
+  .neg { color: var(--red); }
+  .pos { color: var(--green); }
+  .total-row td { font-weight: 700; background: var(--cream2); }
+
+  /* ── PROJECTION SECTION ─────────────────────────── */
+  .proj-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .proj-month {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .proj-month-header {
+    background: var(--forest);
+    color: var(--cream);
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .proj-month-header .month-name { font-family: var(--serif); font-size: 15px; }
+  .proj-month-body { padding: 12px 14px; background: white; }
+  .proj-line { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+  .proj-line .label { color: var(--muted); }
+  .proj-line .value { font-family: var(--mono); font-weight: 500; }
+  .proj-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .proj-net { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; padding: 4px 0; }
+  .proj-net .value.positive { color: var(--green); }
+  .proj-net .value.negative { color: var(--red); }
+  .proj-balance { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; color: var(--muted); }
+  .proj-balance .value { font-family: var(--mono); }
+
+  /* ── MANUAL ITEMS SECTION ───────────────────────── */
+  .manual-section { margin-top: 8px; }
+  .manual-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .manual-title { font-size: 12px; font-weight: 600; color: var(--forest2); }
+  .add-btn {
+    background: var(--forest);
+    color: var(--cream);
+    border: none;
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: opacity .2s;
+  }
+  .add-btn:hover { opacity: .8; }
+  .manual-items { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .manual-item {
+    display: grid;
+    grid-template-columns: 1fr 90px 100px 90px 28px;
+    gap: 6px;
+    align-items: center;
+  }
+  .manual-item input, .manual-item select {
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--text);
+    width: 100%;
+  }
+  .manual-item input:focus, .manual-item select:focus {
+    outline: none;
+    border-color: var(--forest);
+    background: white;
+  }
+  .remove-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+  }
+  .remove-btn:hover { background: #fee2e2; color: var(--red); border-color: var(--red); }
+  .manual-col-headers {
+    display: grid;
+    grid-template-columns: 1fr 90px 100px 90px 28px;
+    gap: 6px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 4px;
+    padding: 0 1px;
+  }
+  .notes-area {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--text);
+    resize: vertical;
+    min-height: 60px;
+    margin-top: 8px;
+  }
+  .notes-area:focus { outline: none; border-color: var(--forest); background: white; }
+  .notes-label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .07em; margin-top: 10px; margin-bottom: 4px; }
+
+  /* ── LOADING ─────────────────────────────────────── */
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; padding: 20px 0; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--forest); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-msg { color: var(--red); font-size: 12px; font-family: var(--mono); padding: 10px 0; }
+
+  /* ── HOW TO USE BANNER ──────────────────────────── */
+  .how-to {
+    background: linear-gradient(135deg, var(--forest) 0%, var(--forest2) 100%);
+    color: var(--cream);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .how-to strong { color: var(--gold); }
+  .how-to-title { font-family: var(--serif); font-size: 16px; margin-bottom: 6px; }
+
+  /* ── P&L TABLE ──────────────────────────────────── */
+  .pl-table th, .pl-table td { font-size: 12px; }
+  .pl-table td.cat { font-weight: 500; padding-left: 20px; }
+  .pl-table td.section-head { font-weight: 700; padding-left: 0; font-size: 12px; background: var(--cream2); }
+
+  /* ── PRINT STYLES ───────────────────────────────── */
+  @media print {
+    body { background: white; font-size: 12px; }
+    .header { position: static; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .refresh-btn, .print-btn, .add-btn, .remove-btn { display: none !important; }
+    .how-to { display: none; }
+    .manual-item input, .manual-item select { border: 1px solid #ccc; background: white; }
+    .notes-area { border: 1px solid #ccc; }
+    .card { break-inside: avoid; }
+    .proj-grid { break-inside: avoid; }
+    .section-label { margin-top: 18px; }
+    @page { margin: 0.6in 0.5in; }
+  }
+
+  /* ── RESPONSIVE ─────────────────────────────────── */
+  @media (max-width: 900px) {
+    .kpi-row   { grid-template-columns: repeat(2,1fr); }
+    .proj-grid { grid-template-columns: repeat(2,1fr); }
+  }
+  @media (max-width: 600px) {
+    .kpi-row   { grid-template-columns: 1fr; }
+    .proj-grid { grid-template-columns: 1fr; }
+    .header { padding: 12px 16px; }
+    .main   { padding: 16px 12px 40px; }
+  }
+  /* ── REPORTS PANEL + SYSTEM HUB LINK (added) ── */
+  .hub-link { color: var(--cream); opacity:.85; text-decoration:none; font-size:12px; font-family:var(--sans); padding:6px 12px; border:1px solid rgba(255,255,255,.25); border-radius:6px; transition:background .2s, opacity .2s; white-space:nowrap; }
+  .hub-link:hover { background: rgba(255,255,255,.14); opacity:1; }
+  .reports-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  @media(max-width:760px){ .reports-grid{ grid-template-columns:1fr 1fr; } }
+  .report-btn { display:flex; flex-direction:column; gap:4px; padding:16px 18px; background:var(--cream); border:1px solid var(--border); border-radius:10px; text-decoration:none; transition:transform .15s, box-shadow .15s, background .15s, border-color .15s; }
+  .report-btn:hover { background:var(--forest); border-color:var(--forest); transform:translateY(-1px); box-shadow:0 4px 14px rgba(45,74,62,.20); }
+  .report-btn-title { font-family:var(--serif); font-size:16px; color:var(--forest); }
+  .report-btn-title::after { content:' \2197'; font-size:11px; opacity:.45; }
+  .report-btn-sub { font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .report-btn:hover .report-btn-title { color:#fff; }
+  .report-btn:hover .report-btn-sub { color:rgba(255,255,255,.72); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <a class="hub-link" href="https://harmonious-strudel-95e820.netlify.app/">← System Hub</a>
+    <div>
+      <div class="header-logo">Vistabule</div>
+      <div class="header-sub">Cash Flow Dashboard</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="status-label"><span class="status-dot"></span>QBO Live</span>
+    <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+    <button class="print-btn" onclick="window.print()">⎙ Print / PDF</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- HOW TO USE -->
+  <div class="how-to">
+    <div class="how-to-title">How to use this dashboard</div>
+    <strong>Live data</strong> (KPIs, AR, AP, P&L) refreshes from QuickBooks automatically. &nbsp;|&nbsp;
+    <strong>4-Month Projection</strong> pulls QBO averages and lets you add manual items (lease costs, one-time expenses, expected income, deposits) for each month. &nbsp;|&nbsp;
+    <strong>Print / PDF</strong> button top-right — use browser Print → Save as PDF to share with your landlord or lender.
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="section-label">Live Snapshot — from QuickBooks</div>
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Bank Balance</div>
+      <div class="kpi-value" id="kpi-bank"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Checking + savings</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Accounts Receivable</div>
+      <div class="kpi-value" id="kpi-ar"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Open invoices</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Accounts Payable</div>
+      <div class="kpi-value" id="kpi-ap"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Outstanding bills</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Net Position</div>
+      <div class="kpi-value" id="kpi-net"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Bank + AR − AP</div>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div class="section-label">Reports — open the full report in QuickBooks</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">QuickBooks Reports</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">Opens live in QuickBooks</span>
+    </div>
+    <div class="card-body">
+      <div class="reports-grid">
+        <a class="report-btn" href="https://qbo.intuit.com/app/report/builder?rptId=sbg:c46c823a-8641-4641-b08a-dda0e499066f&amp;type=system&amp;token=PANDL&amp;previousRoute=standardreports&amp;previousRouteText=Back%20to%20standard%20reports" target="_blank" rel="noopener">
+          <span class="report-btn-title">Profit &amp; Loss</span>
+          <span class="report-btn-sub">Income vs. expenses</span>
+        </a>
+        <a class="report-btn" href="https://qbo.intuit.com/app/report/builder?rptId=sbg:cbe6fa12-96f4-46ad-9d6e-b13349076ee9&amp;type=system&amp;token=BAL_SHEET&amp;previousRoute=standardreports&amp;previousRouteText=Back%20to%20standard%20reports" target="_blank" rel="noopener">
+          <span class="report-btn-title">Balance Sheet</span>
+          <span class="report-btn-sub">Assets, liabilities, equity</span>
+        </a>
+        <a class="report-btn" href="https://qbo.intuit.com/app/report/builder?rptId=sbg:c0499904-3b68-4a09-98e6-75c193352571&amp;type=system&amp;token=AR_AGING&amp;previousRoute=standardreports&amp;previousRouteText=Back%20to%20standard%20reports" target="_blank" rel="noopener">
+          <span class="report-btn-title">A/R Aging</span>
+          <span class="report-btn-sub">Who owes you, by age</span>
+        </a>
+        <a class="report-btn" href="https://qbo.intuit.com/app/report/builder?rptId=sbg:41476b71-0fdc-4724-9e46-4150495f60d1&amp;type=system&amp;token=AP_AGING&amp;previousRoute=standardreports&amp;previousRouteText=Back%20to%20standard%20reports" target="_blank" rel="noopener">
+          <span class="report-btn-title">A/P Aging</span>
+          <span class="report-btn-sub">What you owe, by age</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- 4-MONTH PROJECTION -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div class="section-label">4-Month Cash Flow Projection — June through September 2026</div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Forward Projection</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">
+        Base: QBO 6-month avg &nbsp;·&nbsp; Add manual items below each month
+      </span>
+    </div>
+    <div class="card-body">
+
+      <!-- 4 month columns -->
+      <div class="proj-grid" id="proj-grid">
+        <div class="loading"><div class="spinner"></div>Loading QBO data…</div>
+      </div>
+
+      <!-- Manual items entry -->
+      <div class="manual-section" id="manual-section" style="display:none;">
+        <div style="border-top:2px solid var(--border); padding-top:18px; margin-top:4px;">
+          <div style="font-size:13px;font-weight:600;color:var(--forest);margin-bottom:12px;">
+            ＋ Manual Adjustments &nbsp;<span style="font-weight:300;font-size:11px;color:var(--muted);">— add lease costs, one-time expenses, expected income, deposits, etc.</span>
+          </div>
+          <div class="manual-col-headers">
+            <span>Description</span><span>Month</span><span>Type</span><span style="text-align:right">Amount ($)</span><span></span>
+          </div>
+          <div class="manual-items" id="manual-items"></div>
+          <button class="add-btn" onclick="addManualItem()">+ Add Item</button>
+          <div class="notes-label">Notes / Assumptions</div>
+          <textarea class="notes-area" id="proj-notes" placeholder="e.g. Lease deposit due June 1. Electrician invoice ~$38k in June, may be partially reimbursed by Eagan landlord. Priorworks security deposit refund TBD…" oninput="recalcProjection()"></textarea>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- OPEN INVOICES -->
+  <div class="section-label">Customer Invoices — Open &amp; Upcoming</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Open Invoices</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">From QuickBooks</span>
+    </div>
+    <div class="card-body" id="invoices-body">
+      <div class="loading"><div class="spinner"></div>Loading…</div>
+    </div>
+  </div>
+
+  <!-- AR AGING -->
+  <div class="section-label">Accounts Receivable Aging</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">AR Aging</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">From QuickBooks</span>
+    </div>
+    <div class="card-body" id="ar-body">
+      <div class="loading"><div class="spinner"></div>Loading…</div>
+    </div>
+  </div>
+
+  <!-- AP AGING -->
+  <div class="section-label">Accounts Payable Aging</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">AP Aging</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">From QuickBooks</span>
+    </div>
+    <div class="card-body" id="ap-body">
+      <div class="loading"><div class="spinner"></div>Loading…</div>
+    </div>
+  </div>
+
+  <!-- UPCOMING PAYABLES (manual) -->
+  <div class="section-label">Upcoming Payables — Manual Entry</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Upcoming Payables</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">Manually entered by Steve</span>
+    </div>
+    <div class="card-body" id="payables-body">
+      <div id="payables-list"></div>
+      <div style="margin-top:12px;">
+        <button class="add-btn" onclick="addPayable()">+ Add Payable</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- P&L -->
+  <div class="section-label">P&L — Last 6 Months</div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Profit &amp; Loss</span>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">From QuickBooks · Accrual</span>
+    </div>
+    <div class="card-body" id="pl-body">
+      <div class="loading"><div class="spinner"></div>Loading…</div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// GLOBALS
+// ─────────────────────────────────────────────────────────────
+let qboData = null;
+let manualItems = [];
+let payables = [];
+const MONTHS = ['June 2026','July 2026','August 2026','September 2026'];
+const MONTH_KEYS = ['jun','jul','aug','sep'];
+
+const fmt = n => {
+  if (n == null || isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  const s = abs >= 1000000 ? (abs/1000000).toFixed(2)+'M'
+           : abs >= 1000   ? '$'+abs.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})
+           : '$'+abs.toFixed(0);
+  return n < 0 ? '('+s.replace('$','$')+')' : s;
+};
+const fmtFull = n => {
+  if (n == null || isNaN(n)) return '—';
+  return (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+};
+
+// ─────────────────────────────────────────────────────────────
+// LOAD QBO
+// ─────────────────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    const res = await fetch('/.netlify/functions/qbo?report=all');
+    if (!res.ok) throw new Error('QBO fetch failed: ' + res.status);
+    qboData = await res.json();
+    renderKPIs();
+    renderInvoices();
+    renderAR();
+    renderAP();
+    renderPL();
+    renderProjection();
+  } catch(e) {
+    console.error(e);
+    ['kpi-bank','kpi-ar','kpi-ap','kpi-net','invoices-body','ar-body','ap-body','pl-body']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.querySelector('.loading')) el.innerHTML = '<div class="error-msg">Error loading QBO data. Check token.</div>';
+      });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// KPIs
+// ─────────────────────────────────────────────────────────────
+function renderKPIs() {
+  const bs = qboData?.balanceSheet;
+  let bank = 0, ar = 0, ap = 0;
+  if (bs?.Rows?.Row) {
+    for (const row of bs.Rows.Row) {
+      const label = row.Header?.ColData?.[0]?.value || '';
+      const traverse = (rows) => {
+        if (!rows) return;
+        for (const r of rows) {
+          const n = r.ColData?.[0]?.value || '';
+          const v = parseFloat(r.ColData?.[1]?.value) || 0;
+          if (/checking|savings|bank|cash/i.test(n)) bank += v;
+          if (/accounts receivable/i.test(n) && !/other/i.test(n)) ar += v;
+          if (/accounts payable/i.test(n) && !/other/i.test(n)) ap += v;
+          if (r.Rows?.Row) traverse(r.Rows.Row);
+        }
+      };
+      traverse(row.Rows?.Row);
+    }
+  }
+  const net = bank + ar - ap;
+  document.getElementById('kpi-bank').textContent = fmtFull(bank);
+  document.getElementById('kpi-ar').textContent   = fmtFull(ar);
+  document.getElementById('kpi-ap').textContent   = fmtFull(ap);
+  const netEl = document.getElementById('kpi-net');
+  netEl.textContent = fmtFull(net);
+  netEl.className   = 'kpi-value' + (net < 0 ? ' negative' : '');
+  // Store for projection
+  window._bankBalance = bank;
+  window._arTotal = ar;
+}
+
+// ─────────────────────────────────────────────────────────────
+// OPEN INVOICES
+// ─────────────────────────────────────────────────────────────
+function renderInvoices() {
+  const data = qboData?.openInvoices;
+  const body = document.getElementById('invoices-body');
+  if (!data?.QueryResponse?.Invoice?.length) {
+    body.innerHTML = '<div style="color:var(--muted);font-size:13px;">No open invoices found.</div>';
+    return;
+  }
+  const invs = data.QueryResponse.Invoice;
+  let html = '<table><thead><tr><th>Customer</th><th>Invoice #</th><th>Date</th><th>Due Date</th><th class="num">Balance</th><th>Status</th></tr></thead><tbody>';
+  let total = 0;
+  invs.forEach(inv => {
+    const bal = parseFloat(inv.Balance) || 0;
+    total += bal;
+    const due = inv.DueDate || inv.TxnDate;
+    const isOverdue = due && new Date(due) < new Date();
+    const badge = isOverdue
+      ? '<span style="background:#fef2f2;color:#b91c1c;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;">Overdue</span>'
+      : '<span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;">Open</span>';
+    html += `<tr><td style="font-weight:600;">${inv.CustomerRef?.name||'—'}</td><td style="font-family:var(--mono);color:var(--muted);">#${inv.DocNumber||'—'}</td><td>${inv.TxnDate||'—'}</td><td>${due||'—'}</td><td class="num">${fmtFull(bal)}</td><td>${badge}</td></tr>`;
+  });
+  html += `<tr class="total-row"><td colspan="4">Total Open</td><td class="num">${fmtFull(total)}</td><td></td></tr></tbody></table>`;
+  body.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────
+// AR AGING
+// ─────────────────────────────────────────────────────────────
+function renderAR() {
+  const data = qboData?.arAging;
+  const body = document.getElementById('ar-body');
+  if (!data?.Rows?.Row) { body.innerHTML = '<div class="error-msg">No AR aging data.</div>'; return; }
+  const cols = data.Columns?.Column?.map(c => c.ColTitle) || [];
+  let html = '<table><thead><tr>' + cols.map(c => `<th class="${c!==cols[0]?'num':''}">${c}</th>`).join('') + '</tr></thead><tbody>';
+  data.Rows.Row.forEach(row => {
+    if (row.type === 'Section') return;
+    const cells = row.ColData || [];
+    html += '<tr>' + cells.map((c,i) => `<td class="${i>0?'num':''}">${i>0?fmtFull(parseFloat(c.value)||0):c.value}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────
+// AP AGING
+// ─────────────────────────────────────────────────────────────
+function renderAP() {
+  const data = qboData?.apAging;
+  const body = document.getElementById('ap-body');
+  if (!data?.Rows?.Row) { body.innerHTML = '<div class="error-msg">No AP aging data.</div>'; return; }
+  const cols = data.Columns?.Column?.map(c => c.ColTitle) || [];
+  let html = '<table><thead><tr>' + cols.map(c => `<th class="${c!==cols[0]?'num':''}">${c}</th>`).join('') + '</tr></thead><tbody>';
+  data.Rows.Row.forEach(row => {
+    if (row.type === 'Section') return;
+    const cells = row.ColData || [];
+    html += '<tr>' + cells.map((c,i) => `<td class="${i>0?'num':''}">${i>0?fmtFull(parseFloat(c.value)||0):c.value}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────
+// P&L
+// ─────────────────────────────────────────────────────────────
+function renderPL() {
+  const pl = qboData?.profitAndLoss;
+  const body = document.getElementById('pl-body');
+  if (!pl?.Rows?.Row) { body.innerHTML = '<div class="error-msg">No P&L data.</div>'; return; }
+  const allCols = pl.Columns?.Column || [];
+  const monthCols = allCols.slice(1, allCols.length - 1).slice(-6);
+  const monthLabels = monthCols.map(c => c.ColTitle || '');
+  let html = '<table class="pl-table"><thead><tr><th>Category</th>' + monthLabels.map(m=>`<th class="num">${m}</th>`).join('') + '<th class="num">Total</th></tr></thead><tbody>';
+
+  const getVals = colData => {
+    if (!colData) return Array(monthLabels.length + 1).fill(0);
+    const all = colData.map(c => parseFloat(c?.value) || 0);
+    const mv = all.slice(1, all.length - 1).slice(-6);
+    while (mv.length < monthLabels.length) mv.unshift(0);
+    return [...mv, all[all.length - 1] || 0];
+  };
+
+  // Store avg monthly income/expense for projection
+  let avgIncome = 0, avgExpense = 0;
+  let incomeCount = 0, expenseCount = 0;
+
+  const renderSection = (rows, indent) => {
+    rows.forEach(row => {
+      if (!row) return;
+      if (row.Header) {
+        html += `<tr><td class="section-head" style="padding-left:${indent}px">${row.Header.ColData?.[0]?.value||''}</td>` + Array(monthLabels.length+1).fill('<td></td>').join('') + '</tr>';
+        if (row.Rows?.Row) renderSection(row.Rows.Row, indent + 12);
+        if (row.Summary) {
+          const vals = getVals(row.Summary.ColData);
+          const label = row.Summary.ColData?.[0]?.value || '';
+          html += `<tr class="total-row"><td style="padding-left:${indent}px">${label}</td>` + vals.map(v=>`<td class="num ${v<0?'neg':v>0?'pos':''}">${fmtFull(v)}</td>`).join('') + '</tr>';
+          // Capture income/expense averages for projection
+          if (/total income|total revenue/i.test(label)) {
+            avgIncome = vals.slice(0,-1).reduce((a,b)=>a+b,0) / Math.max(vals.length-1,1);
+            incomeCount++;
+          }
+          if (/total expenses|total cost/i.test(label)) {
+            avgExpense = Math.abs(vals.slice(0,-1).reduce((a,b)=>a+b,0) / Math.max(vals.length-1,1));
+            expenseCount++;
+          }
+        }
+      } else if (row.ColData) {
+        const vals = getVals(row.ColData);
+        const label = row.ColData[0]?.value || '';
+        if (!label) return;
+        html += `<tr><td class="cat" style="padding-left:${indent+8}px">${label}</td>` + vals.map(v=>`<td class="num">${fmtFull(v)}</td>`).join('') + '</tr>';
+      }
+    });
+  };
+  renderSection(pl.Rows.Row, 0);
+  html += '</tbody></table>';
+  body.innerHTML = html;
+
+  // Store averages for projection
+  window._avgMonthlyIncome  = avgIncome  || 0;
+  window._avgMonthlyExpense = avgExpense || 0;
+  recalcProjection();
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4-MONTH PROJECTION
+// ─────────────────────────────────────────────────────────────
+function renderProjection() {
+  document.getElementById('manual-section').style.display = 'block';
+  recalcProjection();
+}
+
+function recalcProjection() {
+  const grid = document.getElementById('proj-grid');
+  const income  = window._avgMonthlyIncome  || 0;
+  const expense = window._avgMonthlyExpense || 0;
+  let runningBalance = (window._bankBalance || 0);
+
+  let html = '';
+  MONTHS.forEach((month, i) => {
+    const key = MONTH_KEYS[i];
+    // Sum manual items for this month
+    let manualIn = 0, manualOut = 0;
+    manualItems.forEach(item => {
+      if (item.month !== key) return;
+      const amt = parseFloat(item.amount) || 0;
+      if (item.type === 'income' || item.type === 'deposit-in') manualIn  += amt;
+      else manualOut += amt;
+    });
+    const totalIn  = income  + manualIn;
+    const totalOut = expense + manualOut;
+    const net      = totalIn - totalOut;
+    runningBalance += net;
+    const netClass = net >= 0 ? 'positive' : 'negative';
+    const balClass = runningBalance >= 0 ? 'positive' : 'negative';
+
+    html += `
+    <div class="proj-month">
+      <div class="proj-month-header">
+        <span class="month-name">${month}</span>
+      </div>
+      <div class="proj-month-body">
+        <div class="proj-line">
+          <span class="label">Base Income</span>
+          <span class="value pos">${fmtFull(income)}</span>
+        </div>
+        ${manualIn > 0 ? `<div class="proj-line"><span class="label">+ Added Income</span><span class="value pos">+${fmtFull(manualIn)}</span></div>` : ''}
+        <div class="proj-line">
+          <span class="label">Base Expenses</span>
+          <span class="value neg">(${fmtFull(expense)})</span>
+        </div>
+        ${manualOut > 0 ? `<div class="proj-line"><span class="label">+ Added Costs</span><span class="value neg">(${fmtFull(manualOut)})</span></div>` : ''}
+        <hr class="proj-divider">
+        <div class="proj-net">
+          <span>Net Cash</span>
+          <span class="value ${netClass}">${net >= 0 ? '+' : ''}${fmtFull(net)}</span>
+        </div>
+        <div class="proj-balance">
+          <span>Est. Balance</span>
+          <span class="value ${balClass}">${fmtFull(runningBalance)}</span>
+        </div>
+      </div>
+    </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────
+// MANUAL ITEMS
+// ─────────────────────────────────────────────────────────────
+let itemId = 0;
+function addManualItem(desc='', month='jun', type='expense', amount='') {
+  const id = ++itemId;
+  manualItems.push({ id, desc, month, type, amount });
+  renderManualItems();
+}
+
+function removeManualItem(id) {
+  manualItems = manualItems.filter(i => i.id !== id);
+  renderManualItems();
+  recalcProjection();
+}
+
+function updateItem(id, field, value) {
+  const item = manualItems.find(i => i.id === id);
+  if (item) { item[field] = value; recalcProjection(); }
+}
+
+function renderManualItems() {
+  const container = document.getElementById('manual-items');
+  if (!manualItems.length) { container.innerHTML = ''; return; }
+  container.innerHTML = manualItems.map(item => `
+    <div class="manual-item">
+      <input type="text" placeholder="Description (e.g. Lease deposit)" value="${item.desc}"
+        oninput="updateItem(${item.id},'desc',this.value)">
+      <select onchange="updateItem(${item.id},'month',this.value)">
+        ${MONTH_KEYS.map((k,i)=>`<option value="${k}" ${item.month===k?'selected':''}>${MONTHS[i].split(' ')[0]}</option>`).join('')}
+      </select>
+      <select onchange="updateItem(${item.id},'type',this.value)">
+        <option value="expense"    ${item.type==='expense'?'selected':''}>Expense / Cost</option>
+        <option value="income"     ${item.type==='income'?'selected':''}>Income / Revenue</option>
+        <option value="deposit-in" ${item.type==='deposit-in'?'selected':''}>Deposit In</option>
+        <option value="deposit-out"${item.type==='deposit-out'?'selected':''}>Deposit Out</option>
+      </select>
+      <input type="number" placeholder="0" value="${item.amount}" style="text-align:right;"
+        oninput="updateItem(${item.id},'amount',this.value)">
+      <button class="remove-btn" onclick="removeManualItem(${item.id})">✕</button>
+    </div>
+  `).join('');
+}
+
+// Pre-populate with known Vistabule items from the spreadsheet
+function preloadKnownItems() {
+  addManualItem('New lease — monthly rent', 'jun', 'expense', '');
+  addManualItem('Lease security deposit', 'jun', 'deposit-out', '');
+  addManualItem('Electrician / contractor (Eagan buildout)', 'jun', 'expense', '38000');
+  addManualItem('Relocation / moving costs', 'jun', 'expense', '');
+  addManualItem('Priorworks security deposit refund', 'jun', 'deposit-in', '');
+  addManualItem('New lease — monthly rent', 'jul', 'expense', '');
+  addManualItem('New lease — monthly rent', 'aug', 'expense', '');
+  addManualItem('New lease — monthly rent', 'sep', 'expense', '');
+}
+
+// ─────────────────────────────────────────────────────────────
+// PAYABLES (manual)
+// ─────────────────────────────────────────────────────────────
+let payableId = 0;
+function addPayable() {
+  payables.push({ id: ++payableId, desc:'', due:'', amount:'' });
+  renderPayables();
+}
+function renderPayables() {
+  const el = document.getElementById('payables-list');
+  if (!payables.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;margin-bottom:8px;">No payables entered yet.</div>'; return; }
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 130px 120px 28px;gap:6px;font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+      <span>Description</span><span>Due Date</span><span style="text-align:right">Amount ($)</span><span></span>
+    </div>
+    ${payables.map(p=>`
+    <div style="display:grid;grid-template-columns:1fr 130px 120px 28px;gap:6px;align-items:center;margin-bottom:6px;">
+      <input type="text" placeholder="Vendor / description" value="${p.desc}" oninput="updatePayable(${p.id},'desc',this.value)" style="border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--sans);background:var(--cream);color:var(--text);width:100%;">
+      <input type="date" value="${p.due}" oninput="updatePayable(${p.id},'due',this.value)" style="border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--sans);background:var(--cream);color:var(--text);width:100%;">
+      <input type="number" placeholder="0" value="${p.amount}" oninput="updatePayable(${p.id},'amount',this.value)" style="border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--sans);background:var(--cream);color:var(--text);width:100%;text-align:right;">
+      <button class="remove-btn" onclick="removePayable(${p.id})">✕</button>
+    </div>`).join('')}
+    <div style="text-align:right;font-weight:700;font-family:var(--mono);font-size:13px;padding:4px 34px 0 0;border-top:1px solid var(--border);margin-top:4px;">
+      Total: ${fmtFull(payables.reduce((s,p)=>s+(parseFloat(p.amount)||0),0))}
+    </div>`;
+}
+function updatePayable(id,field,value){const p=payables.find(x=>x.id===id);if(p)p[field]=value;renderPayables();}
+function removePayable(id){payables=payables.filter(x=>x.id!==id);renderPayables();}
+
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  preloadKnownItems();
+  renderManualItems();
+  loadAll();
+});
+</script>
+</body>
+</html>

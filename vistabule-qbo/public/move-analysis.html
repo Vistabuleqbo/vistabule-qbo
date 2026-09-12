@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vistabule · Move Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest:  #2d4a3e;
+    --forest2: #3a5c4f;
+    --cream:   #f5f0e8;
+    --cream2:  #ede8dc;
+    --sand:    #c8b99a;
+    --gold:    #c9a84c;
+    --red:     #b94040;
+    --green:   #3a6e52;
+    --muted:   #7a8a82;
+    --border:  #d4cfc4;
+    --text:    #1e2e28;
+    --mono:    'DM Mono', monospace;
+    --serif:   'DM Serif Display', serif;
+    --sans:    'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ─────────────────────────────────────── */
+  .header {
+    background: var(--forest);
+    color: var(--cream);
+    padding: 18px 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-logo { font-family: var(--serif); font-size: 24px; }
+  .header-title { font-size: 12px; opacity: .6; font-family: var(--mono); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .status-pill {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #6dba8a; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .btn {
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-ghost { background: rgba(255,255,255,.1); color: var(--cream); border: 1px solid rgba(255,255,255,.2); }
+  .btn-gold  { background: var(--gold); color: var(--forest); }
+
+  /* ── MAIN ───────────────────────────────────────── */
+  .main { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* ── SECTION LABEL ──────────────────────────────── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--muted);
+    margin: 28px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── KPI ROW ─────────────────────────────────────── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kpi {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--forest);
+    border-radius: 10px 10px 0 0;
+  }
+  .kpi-label { font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .kpi-value { font-size: 28px; font-family: var(--serif); color: var(--forest); line-height: 1; }
+  .kpi-value.negative { color: var(--red); }
+  .kpi-sub   { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+  /* ── PROJECTION CARD ────────────────────────────── */
+  .proj-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .proj-card-header {
+    background: var(--cream2);
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .proj-card-title { font-weight: 600; font-size: 14px; }
+  .proj-card-sub   { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .proj-card-body  { padding: 22px; }
+
+  /* ── MONTH COLUMNS ──────────────────────────────── */
+  .proj-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .month-col {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .month-header {
+    background: var(--forest);
+    color: var(--cream);
+    padding: 10px 14px 8px;
+  }
+  .month-name  { font-family: var(--serif); font-size: 16px; }
+  .month-body  { padding: 14px; background: white; }
+
+  .proj-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; padding: 3px 0; }
+  .proj-row .lbl { color: var(--muted); }
+  .proj-row .val { font-family: var(--mono); font-weight: 500; }
+  .proj-row .val.pos { color: var(--green); }
+  .proj-row .val.neg { color: var(--red); }
+  .proj-divider { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .proj-net-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 700; padding: 2px 0; }
+  .proj-net-row .val.pos { color: var(--green); font-family: var(--mono); }
+  .proj-net-row .val.neg { color: var(--red); font-family: var(--mono); }
+  .proj-bal-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; padding: 4px 0 0; color: var(--muted); border-top: 1px dashed var(--border); margin-top: 6px; }
+  .proj-bal-row .val { font-family: var(--mono); font-weight: 600; }
+  .proj-bal-row .val.pos { color: var(--green); }
+  .proj-bal-row .val.neg { color: var(--red); }
+
+  /* ── MANUAL ADJUSTMENTS ─────────────────────────── */
+  .manual-wrap { border-top: 2px solid var(--border); padding-top: 20px; }
+  .manual-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--forest);
+    margin-bottom: 4px;
+  }
+  .manual-hint { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .col-headers {
+    display: grid;
+    grid-template-columns: 1fr 100px 130px 100px 32px;
+    gap: 8px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    padding: 0 2px;
+    margin-bottom: 6px;
+  }
+  .col-headers span:nth-child(4) { text-align: right; }
+  .items-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+  .item-row {
+    display: grid;
+    grid-template-columns: 1fr 100px 130px 100px 32px;
+    gap: 8px;
+    align-items: center;
+  }
+  .item-row input, .item-row select {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 9px;
+    font-size: 12px;
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--text);
+    width: 100%;
+    transition: border-color .15s, background .15s;
+  }
+  .item-row input:focus, .item-row select:focus {
+    outline: none;
+    border-color: var(--forest);
+    background: white;
+  }
+  .item-row input.amt { text-align: right; font-family: var(--mono); }
+  .rm-btn {
+    width: 32px; height: 32px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .rm-btn:hover { background: #fee2e2; color: var(--red); border-color: #fca5a5; }
+  .add-btn {
+    background: var(--forest);
+    color: var(--cream);
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: opacity .15s;
+  }
+  .add-btn:hover { opacity: .8; }
+
+  /* ── NOTES ──────────────────────────────────────── */
+  .notes-label { font-size: 10px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 16px 0 6px; }
+  .notes-area {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-size: 12px;
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--text);
+    resize: vertical;
+    min-height: 70px;
+    line-height: 1.6;
+    transition: border-color .15s, background .15s;
+  }
+  .notes-area:focus { outline: none; border-color: var(--forest); background: white; }
+
+  /* ── LOADING / ERROR ────────────────────────────── */
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; padding: 16px 0; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--forest); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── PRINT ──────────────────────────────────────── */
+  @media print {
+    body { background: white; }
+    .header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .btn, .add-btn, .rm-btn { display: none !important; }
+    .month-header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .item-row input, .item-row select, .notes-area { border: 1px solid #ccc; background: white; }
+    .proj-card { break-inside: avoid; }
+    @page { margin: 0.5in; }
+  }
+
+  @media (max-width: 700px) {
+    .kpi-row  { grid-template-columns: repeat(2,1fr); }
+    .proj-grid { grid-template-columns: repeat(2,1fr); }
+    .col-headers, .item-row { grid-template-columns: 1fr 80px 110px 90px 32px; }
+  }
+
+  /* ── RUNWAY INDICATOR ───────────────────────────── */
+  .runway-box {
+    border-radius: 12px;
+    padding: 24px 28px;
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 40px;
+  }
+  .runway-box.green  { background: #f0faf4; border: 2px solid #6dba8a; }
+  .runway-box.yellow { background: #fffbeb; border: 2px solid #f59e0b; }
+  .runway-box.red    { background: #fef2f2; border: 2px solid #ef4444; }
+  .runway-icon { font-size: 36px; flex-shrink: 0; line-height: 1; margin-top: 2px; }
+  .runway-content { flex: 1; }
+  .runway-headline {
+    font-family: var(--serif);
+    font-size: 22px;
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+  .runway-box.green  .runway-headline { color: #1a5c35; }
+  .runway-box.yellow .runway-headline { color: #92400e; }
+  .runway-box.red    .runway-headline { color: #7f1d1d; }
+  .runway-detail { font-size: 13px; line-height: 1.7; color: var(--text); }
+  .runway-detail strong { font-weight: 600; }
+  .runway-months {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+    margin-left: 4px;
+  }
+  .runway-box.green  .runway-months { background: #dcfce7; color: #166534; }
+  .runway-box.yellow .runway-months { background: #fef3c7; color: #92400e; }
+  .runway-box.red    .runway-months { background: #fee2e2; color: #991b1b; }
+
+  @media print {
+    .runway-box { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-logo">Vistabule</div>
+    <div class="header-title">Move Analysis · Eagan Relocation · June–September 2026</div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill"><span class="dot"></span>QBO Live</div>
+    <button class="btn btn-ghost" onclick="loadQBO()">↻ Refresh</button>
+    <button class="btn btn-gold" onclick="window.print()">⎙ Print / PDF</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- LIVE SNAPSHOT -->
+  <div class="section-label">Live Snapshot — from QuickBooks</div>
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Bank Balance</div>
+      <div class="kpi-value" id="kpi-bank"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Checking + savings</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Accounts Receivable</div>
+      <div class="kpi-value" id="kpi-ar"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Open invoices</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Accounts Payable</div>
+      <div class="kpi-value" id="kpi-ap"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Outstanding bills</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Net Position</div>
+      <div class="kpi-value" id="kpi-net"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Bank + AR − AP</div>
+    </div>
+  </div>
+
+  <!-- 4-MONTH PROJECTION -->
+  <div class="section-label">4-Month Cash Flow Projection</div>
+  <div class="proj-card">
+    <div class="proj-card-header">
+      <span class="proj-card-title">Forward Projection</span>
+      <span class="proj-card-sub">Base: QBO actuals where available, avg estimate for future months &nbsp;·&nbsp; Adjust below for move costs</span>
+    </div>
+    <div class="proj-card-body">
+
+      <div class="proj-grid" id="proj-grid">
+        <div class="loading"><div class="spinner"></div>Loading QBO data…</div>
+      </div>
+
+      <div class="manual-wrap" id="manual-wrap" style="display:none;">
+        <div class="manual-title">Manual Adjustments</div>
+        <div class="manual-hint">Add lease costs, one-time expenses, expected income, deposit refunds, etc.</div>
+        <div class="col-headers">
+          <span>Description</span>
+          <span>Month</span>
+          <span>Type</span>
+          <span style="text-align:right">Amount ($)</span>
+          <span></span>
+        </div>
+        <div class="items-list" id="items-list"></div>
+        <button class="add-btn" onclick="addItem()">+ Add Item</button>
+        <div class="notes-label">Notes &amp; Assumptions</div>
+        <textarea class="notes-area" id="notes" placeholder="e.g. Lease deposit due June 1. Electrician invoice ~$38k in June. Priorworks deposit refund TBD. Labor disruption estimated 2–3 weeks…" oninput="recalc()"></textarea>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RUNWAY -->
+  <div class="section-label" id="runway-label" style="display:none;margin-top:28px;">Decision Indicator</div>
+  <div id="runway-card"></div>
+
+</div><!-- /main -->
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────
+const MONTHS     = ['June 2026','July 2026','August 2026','September 2026'];
+const MONTH_KEYS = ['jun','jul','aug','sep'];
+
+// ── FORMATTING ───────────────────────────────────────────────
+const fmt = n => {
+  if (n == null || isNaN(n)) return '—';
+  const s = '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0});
+  return n < 0 ? '(' + s + ')' : s;
+};
+
+// ── STATE ────────────────────────────────────────────────────
+let avgIncome      = 0;   // fallback average for months without actuals
+let avgExpense     = 0;
+let monthIncome    = {};  // keyed by "YYYY-MM"
+let monthExpense   = {};
+let expenseOverride= {};  // keyed by MONTH_KEYS e.g. 'jun'
+let bankBal        = 0;
+let items          = [];
+let itemId         = 0;
+
+// ── LOAD QBO ─────────────────────────────────────────────────
+async function loadQBO() {
+  try {
+    const res = await fetch('/.netlify/functions/qbo?report=all');
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    parseKPIs(data);
+    parsePL(data);
+    renderKPIs();
+    document.getElementById('manual-wrap').style.display = 'block';
+    recalc();
+  } catch(e) {
+    ['kpi-bank','kpi-ar','kpi-ap','kpi-net'].forEach(id => {
+      document.getElementById(id).innerHTML = '<span style="color:var(--red);font-size:12px;font-family:var(--mono);">Error loading QBO</span>';
+    });
+    document.getElementById('proj-grid').innerHTML = '<span style="color:var(--red);font-size:12px;font-family:var(--mono);">Error loading QBO data</span>';
+  }
+}
+
+// ── PARSE BALANCE SHEET ───────────────────────────────────────
+let _bank=0, _ar=0, _ap=0;
+function parseKPIs(data) {
+  _bank=0; _ar=0; _ap=0;
+  const bs = data?.balanceSheet;
+  if (!bs?.Rows?.Row) return;
+  const walk = rows => {
+    if (!rows) return;
+    for (const r of rows) {
+      const n = r.ColData?.[0]?.value || '';
+      const v = parseFloat(r.ColData?.[1]?.value) || 0;
+      if (/checking|savings|bank|cash/i.test(n)) _bank += v;
+      if (/accounts receivable/i.test(n) && !/other/i.test(n)) _ar += v;
+      if (/accounts payable/i.test(n)    && !/other/i.test(n)) _ap += v;
+      if (r.Rows?.Row) walk(r.Rows.Row);
+    }
+  };
+  // Walk all rows recursively including top-level sections
+  const walkAll = rows => {
+    if (!rows) return;
+    for (const r of rows) {
+      const n = r.ColData?.[0]?.value || '';
+      const v = parseFloat(r.ColData?.[1]?.value) || 0;
+      if (/checking|savings|bank|cash/i.test(n)) _bank += v;
+      if (/accounts receivable/i.test(n) && !/other/i.test(n)) _ar += v;
+      if (/accounts payable/i.test(n)    && !/other/i.test(n)) _ap += v;
+      if (r.Rows?.Row) walkAll(r.Rows.Row);
+    }
+  };
+  walkAll(bs.Rows.Row);
+  bankBal = _bank;
+}
+
+function renderKPIs() {
+  const net = _bank + _ar - _ap;
+  document.getElementById('kpi-bank').textContent = fmt(_bank);
+  document.getElementById('kpi-ar').textContent   = fmt(_ar);
+  document.getElementById('kpi-ap').textContent   = fmt(_ap);
+  const el = document.getElementById('kpi-net');
+  el.textContent = fmt(net);
+  el.className   = 'kpi-value' + (net < 0 ? ' negative' : '');
+}
+
+// ── PARSE P&L — per-month actuals + fallback average ─────────
+// Keys stored as "YYYY-MM" (e.g. "2026-06") — unambiguous, locale-independent
+function parsePL(data) {
+  avgIncome=0; avgExpense=0; monthIncome={}; monthExpense={};
+  const pl = data?.profitAndLoss;
+  if (!pl?.Rows?.Row) return;
+
+  // Build array of "YYYY-MM" keys for each data column (skip col 0 = label, last = Total)
+  const allCols = pl.Columns?.Column || [];
+  const dataColKeys = [];
+  for (let i = 1; i < allCols.length - 1; i++) {
+    const meta = allCols[i].MetaData || [];
+    const start = meta.find(m => m.Name === 'StartDate')?.Value || '';
+    if (start) {
+      dataColKeys.push(start.slice(0, 7)); // "2026-06"
+    } else {
+      dataColKeys.push(allCols[i].ColTitle || '');
+    }
+  }
+
+  // Walk rows recursively, return per-data-column values for first matching summary row
+  const findRowVals = (rows, labelTest) => {
+    for (const row of rows) {
+      if (row.Summary) {
+        const lbl = row.Summary.ColData?.[0]?.value || '';
+        if (labelTest(lbl)) {
+          // ColData: [label, month1..., total] — slice off label and total
+          const vals = (row.Summary.ColData || []).slice(1, -1)
+                         .map(c => Math.abs(parseFloat(c?.value) || 0));
+          return vals;
+        }
+      }
+      if (row.Rows?.Row) {
+        const found = findRowVals(row.Rows.Row, labelTest);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const incVals = findRowVals(pl.Rows.Row, l => /total income|total revenue/i.test(l));
+  const expVals = findRowVals(pl.Rows.Row, l => /total expenses|total cost|gross profit/i.test(l));
+
+  if (incVals) {
+    incVals.forEach((v, i) => { if (dataColKeys[i]) monthIncome[dataColKeys[i]] = v; });
+    avgIncome = incVals.reduce((a,b)=>a+b,0) / Math.max(incVals.length, 1);
+  }
+  if (expVals) {
+    expVals.forEach((v, i) => { if (dataColKeys[i]) monthExpense[dataColKeys[i]] = v; });
+    avgExpense = expVals.reduce((a,b)=>a+b,0) / Math.max(expVals.length, 1);
+  }
+  console.log('parsePL dataColKeys:', dataColKeys);
+  console.log('parsePL monthIncome:', monthIncome);
+}
+
+// ── MONTH KEY MAP — YYYY-MM for each projection month ────────
+const MONTH_YYYYMM = ['2026-06','2026-07','2026-08','2026-09'];
+
+// ── PROJECTION ────────────────────────────────────────────────
+function recalc() {
+  const grid = document.getElementById('proj-grid');
+  let running = bankBal;
+  let html = '';
+
+  MONTHS.forEach((month, i) => {
+    const key    = MONTH_KEYS[i];
+    const yyyymm = MONTH_YYYYMM[i];
+
+    // Use actual QBO figure for this month if available, else fallback average
+    const hasActual  = monthIncome[yyyymm] !== undefined;
+    const baseIn     = hasActual ? monthIncome[yyyymm]  : avgIncome;
+    const qboExpense = hasActual ? monthExpense[yyyymm] : avgExpense;
+    const baseOut    = expenseOverride[key] !== undefined ? expenseOverride[key] : qboExpense;
+    const incLabel   = hasActual ? 'Actual' : 'Avg (est.)';
+    const expLabel   = expenseOverride[key] !== undefined ? 'Override' : (hasActual ? 'Actual' : 'Avg (est.)');
+
+    let manIn=0, manOut=0;
+    items.forEach(item => {
+      if (item.month !== key) return;
+      const amt = parseFloat(item.amount) || 0;
+      if (item.type === 'income' || item.type === 'deposit-in') manIn  += amt;
+      else manOut += amt;
+    });
+
+    const totalIn  = baseIn  + manIn;
+    const totalOut = baseOut + manOut;
+    const net      = totalIn - totalOut;
+    running       += net;
+
+    const nc = net     >= 0 ? 'pos' : 'neg';
+    const bc = running >= 0 ? 'pos' : 'neg';
+
+    const overrideVal = expenseOverride[key];
+
+    html += `
+    <div class="month-col">
+      <div class="month-header">
+        <div class="month-name">${month}</div>
+        <div style="font-size:10px;opacity:.6;font-family:var(--mono);margin-top:2px;">${incLabel}</div>
+      </div>
+      <div class="month-body">
+        <div class="proj-row"><span class="lbl">Base Income</span><span class="val pos">${fmt(baseIn)}</span></div>
+        ${manIn  > 0 ? `<div class="proj-row"><span class="lbl">+ Added Income</span><span class="val pos">+${fmt(manIn)}</span></div>` : ''}
+        <div class="proj-row" style="align-items:center;">
+          <span class="lbl">Base Expenses <span style="font-size:9px;opacity:.6;">${expLabel}</span></span>
+          <input type="number"
+            placeholder="${fmt(qboExpense)}"
+            value="${overrideVal !== undefined ? overrideVal : ''}"
+            oninput="setExpOverride('${key}', this.value)"
+            style="width:82px;border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;font-family:var(--mono);background:var(--cream);color:var(--red);text-align:right;margin-left:auto;">
+        </div>
+        ${manOut > 0 ? `<div class="proj-row"><span class="lbl">+ Added Costs</span><span class="val neg">(${fmt(manOut)})</span></div>` : ''}
+        <hr class="proj-divider">
+        <div class="proj-net-row"><span>Net Cash</span><span class="val ${nc}">${net>=0?'+':''}${fmt(net)}</span></div>
+        <div class="proj-bal-row"><span>Est. Balance</span><span class="val ${bc}">${fmt(running)}</span></div>
+      </div>
+    </div>`;
+  });
+
+  grid.innerHTML = html;
+  renderRunway(running);
+}
+
+// ── RUNWAY INDICATOR ──────────────────────────────────────────
+function renderRunway(finalBalance) {
+  const card  = document.getElementById('runway-card');
+  const label = document.getElementById('runway-label');
+  if (!avgExpense || !card) return;
+
+  label.style.display = 'block';
+
+  // Monthly burn = base expenses + any recurring manual costs (items in 2+ months)
+  const descCounts = {};
+  items.forEach(i => { descCounts[i.desc] = (descCounts[i.desc]||0) + 1; });
+  const recurringOut = items
+    .filter(i => (i.type==='expense'||i.type==='deposit-out') && descCounts[i.desc] >= 2)
+    .reduce((sum, i, _, arr) => {
+      // Only add once per description
+      const already = arr.slice(0, arr.indexOf(i)).some(x => x.desc===i.desc);
+      return already ? sum : sum + (parseFloat(i.amount)||0);
+    }, 0);
+
+  const monthlyBurn   = avgExpense + recurringOut;
+  const runwayMonths  = monthlyBurn > 0 ? Math.floor(finalBalance / monthlyBurn) : 99;
+
+  let tier, icon, headline, detail;
+
+  if (finalBalance <= 0) {
+    tier = 'red'; icon = '⚠️';
+    headline = 'Cash depleted by end of projection';
+    detail = `At current income and expense levels with these move costs, the projected balance turns negative before September ends. <strong>Immediate attention needed</strong> — reduce move costs, increase sales, or reconsider the commitment.`;
+  } else if (runwayMonths < 3) {
+    tier = 'red'; icon = '⚠️';
+    headline = `Roughly ${runwayMonths} month${runwayMonths===1?'':'s'} of runway after September`;
+    detail = `After the move costs, the projected end-of-September balance covers only <strong>${runwayMonths} month${runwayMonths===1?'':'s'}</strong> of operating expenses. A slow fall sales month could create a real cash problem. Consider what it would take to extend this to at least 4–6 months.`;
+  } else if (runwayMonths < 6) {
+    tier = 'yellow'; icon = '⚡';
+    headline = `Roughly ${runwayMonths} months of runway after September`;
+    detail = `The projected end-of-September balance covers about <strong>${runwayMonths} months</strong> of operating expenses — manageable but tight. The fall selling season and new website will need to perform. Make sure all move costs are captured here.`;
+  } else if (runwayMonths < 12) {
+    tier = 'yellow'; icon = '✅';
+    headline = `Roughly ${runwayMonths} months of runway after September`;
+    detail = `About <strong>${runwayMonths} months</strong> of cushion heading into fall — workable. Enough time for the new website and system to start generating results before cash becomes pressure. Watch the fall selling season closely.`;
+  } else {
+    tier = 'green'; icon = '✅';
+    headline = `Strong position — ${runwayMonths}+ months of runway`;
+    detail = `After all projected move costs, the estimated balance supports <strong>${runwayMonths}+ months</strong> of operations. Real breathing room to execute the website launch, get Lily up to speed, and build toward a healthy P&L. The move looks financially supportable at these numbers.`;
+  }
+
+  card.innerHTML = `
+    <div class="runway-box ${tier}">
+      <div class="runway-icon">${icon}</div>
+      <div class="runway-content">
+        <div class="runway-headline">${headline}</div>
+        <div class="runway-detail">${detail}</div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted);font-family:var(--mono);">
+          Based on: ${fmt(finalBalance)} est. Sep balance &divide; ${fmt(monthlyBurn)}/mo burn rate
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── EXPENSE OVERRIDE ─────────────────────────────────────────
+function setExpOverride(key, val) {
+  if (val === '' || val === null) {
+    delete expenseOverride[key];
+  } else {
+    expenseOverride[key] = parseFloat(val) || 0;
+  }
+  recalc();
+}
+
+// ── MANUAL ITEMS ──────────────────────────────────────────────
+function addItem(desc='', month='jun', type='expense', amount='') {
+  const id = ++itemId;
+  items.push({id, desc, month, type, amount});
+  renderItems();
+}
+
+function removeItem(id) {
+  items = items.filter(i => i.id !== id);
+  renderItems();
+  recalc();
+}
+
+function updateItem(id, field, value) {
+  const item = items.find(i => i.id === id);
+  if (item) { item[field] = value; recalc(); }
+}
+
+function renderItems() {
+  const list = document.getElementById('items-list');
+  if (!items.length) { list.innerHTML = ''; return; }
+  list.innerHTML = items.map(item => `
+    <div class="item-row">
+      <input type="text" placeholder="Description" value="${item.desc}"
+        oninput="updateItem(${item.id},'desc',this.value)">
+      <select onchange="updateItem(${item.id},'month',this.value)">
+        ${MONTH_KEYS.map((k,i) => `<option value="${k}" ${item.month===k?'selected':''}>${MONTHS[i].split(' ')[0]}</option>`).join('')}
+      </select>
+      <select onchange="updateItem(${item.id},'type',this.value)">
+        <option value="expense"     ${item.type==='expense'?'selected':''}>Expense / Cost</option>
+        <option value="income"      ${item.type==='income'?'selected':''}>Income / Revenue</option>
+        <option value="deposit-in"  ${item.type==='deposit-in'?'selected':''}>Deposit Refund In</option>
+        <option value="deposit-out" ${item.type==='deposit-out'?'selected':''}>Deposit Out</option>
+      </select>
+      <input type="number" class="amt" placeholder="0" value="${item.amount}"
+        oninput="updateItem(${item.id},'amount',this.value)">
+      <button class="rm-btn" onclick="removeItem(${item.id})">✕</button>
+    </div>
+  `).join('');
+}
+
+// Pre-load known Vistabule move items
+function preload() {
+  addItem('New lease — monthly rent',              'jun', 'expense',     '');
+  addItem('Lease security deposit',                'jun', 'deposit-out', '');
+  addItem('Electrician / contractor (Eagan)',      'jun', 'expense',     '38000');
+  addItem('Relocation / moving costs',             'jun', 'expense',     '');
+  addItem('Priorworks security deposit refund',    'jun', 'deposit-in',  '');
+  addItem('New lease — monthly rent',              'jul', 'expense',     '');
+  addItem('New lease — monthly rent',              'aug', 'expense',     '');
+  addItem('New lease — monthly rent',              'sep', 'expense',     '');
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+preload();
+renderItems();
+loadQBO();
+</script>
+</body>
+</html>
