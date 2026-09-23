@@ -1,12 +1,18 @@
 // netlify/functions/qbo.js
-// Serverless function that proxies QuickBooks Online API calls
-// Auto-saves new refresh token to Netlify environment variables after each call
+// Serverless function that proxies QuickBooks Online API calls.
+//
+// QuickBooks issues a NEW refresh token every time one is used, and the previous one stops
+// working after a short grace period. The newest token therefore has to live somewhere the
+// function can read at runtime. Environment variables can't do that job: changes to them do
+// not reach an already-deployed function until the next deploy. So the rotating token is kept
+// in Netlify Blobs, and the QBO_REFRESH_TOKEN environment variable only acts as the starting
+// ("seed") value. To re-seed by hand: generate a fresh token in the Intuit OAuth Playground,
+// put it in QBO_REFRESH_TOKEN, and redeploy.
+
+const { getStore, connectLambda } = require('@netlify/blobs');
 
 const QBO_BASE = 'https://quickbooks.api.intuit.com/v3/company';
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-const NETLIFY_SITE_ID = 'meek-lebkuchen-d6bebd';
-// Read from an environment variable instead of hardcoding (see security note).
-const NETLIFY_TOKEN = process.env.NETLIFY_TOKEN;
 
 async function refreshAccessToken(clientId, clientSecret, refreshToken) {
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
@@ -24,39 +30,40 @@ async function refreshAccessToken(clientId, clientSecret, refreshToken) {
   return { accessToken: data.access_token, newRefreshToken: data.refresh_token };
 }
 
-async function saveRefreshToken(newRefreshToken) {
+function openTokenStore(event) {
   try {
-    if (!NETLIFY_TOKEN) { console.warn('NETLIFY_TOKEN not set — cannot auto-save refresh token'); return; }
-    // Get site ID first
-    const sitesRes = await fetch('https://api.netlify.com/api/v1/sites?filter=all', {
-      headers: { 'Authorization': `Bearer ${NETLIFY_TOKEN}` }
-    });
-    const sites = await sitesRes.json();
-    const site = sites.find(s => s.name === NETLIFY_SITE_ID || s.id.startsWith('meek'));
-    if (!site) { console.warn('Could not find site ID'); return; }
+    if (typeof connectLambda === 'function') connectLambda(event);
+    return getStore('qbo-tokens');
+  } catch (e) {
+    console.warn('Netlify Blobs unavailable, using the environment token only:', e.message);
+    return null;
+  }
+}
 
-    const siteId = site.id;
+// Use the saved token only if it descends from the environment token currently deployed.
+// If someone replaces QBO_REFRESH_TOKEN by hand, the saved chain is ignored and restarts from it.
+async function resolveRefreshToken(store, envToken) {
+  if (!store) return envToken;
+  try {
+    const saved = await store.get('refresh', { type: 'json' });
+    if (saved && saved.token && saved.seed === envToken) return saved.token;
+  } catch (e) {
+    console.warn('Could not read saved refresh token:', e.message);
+  }
+  return envToken;
+}
 
-    // Update the environment variable
-    const res = await fetch(`https://api.netlify.com/api/v1/sites/${siteId}/env/QBO_REFRESH_TOKEN`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${NETLIFY_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        key: 'QBO_REFRESH_TOKEN',
-        values: [{ value: newRefreshToken, context: 'all' }]
-      })
+async function saveRefreshToken(store, newRefreshToken, envToken) {
+  if (!store || !newRefreshToken) return;
+  try {
+    await store.setJSON('refresh', {
+      token: newRefreshToken,
+      seed: envToken,
+      savedAt: new Date().toISOString()
     });
-    if (res.ok) {
-      console.log('Refresh token auto-saved to Netlify successfully');
-    } else {
-      const err = await res.text();
-      console.warn('Failed to save refresh token:', err);
-    }
-  } catch(e) {
-    console.warn('Error saving refresh token:', e.message);
+    console.log('Rotated QuickBooks refresh token saved to Netlify Blobs');
+  } catch (e) {
+    console.warn('Could not save refresh token:', e.message);
   }
 }
 
@@ -81,22 +88,30 @@ exports.handler = async (event) => {
   try {
     const clientId     = process.env.QBO_CLIENT_ID;
     const clientSecret = process.env.QBO_CLIENT_SECRET;
-    const refreshToken = process.env.QBO_REFRESH_TOKEN;
+    const envToken     = process.env.QBO_REFRESH_TOKEN;
     const realmId      = process.env.QBO_REALM_ID;
 
-    if (!clientId || !clientSecret || !refreshToken || !realmId) {
+    if (!clientId || !clientSecret || !envToken || !realmId) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'QBO credentials not configured' }) };
     }
 
-    // Get fresh access token and new refresh token
-    const { accessToken, newRefreshToken } = await refreshAccessToken(clientId, clientSecret, refreshToken);
+    const store = openTokenStore(event);
+    const currentToken = await resolveRefreshToken(store, envToken);
 
-    // Auto-save the new refresh token to Netlify.
-    // MUST be awaited: in a serverless function, un-awaited work is killed when the
-    // handler returns, which is why the rotated token was never being persisted.
-    if (newRefreshToken && newRefreshToken !== refreshToken) {
-      await saveRefreshToken(newRefreshToken);
+    // Get fresh access token and new refresh token
+    let tokens;
+    try {
+      tokens = await refreshAccessToken(clientId, clientSecret, currentToken);
+    } catch (e) {
+      if (currentToken === envToken) throw e;
+      console.warn('Saved refresh token was rejected; retrying with the environment token');
+      tokens = await refreshAccessToken(clientId, clientSecret, envToken);
     }
+    const { accessToken, newRefreshToken } = tokens;
+
+    // MUST be awaited: in a serverless function, un-awaited work is killed when the
+    // handler returns.
+    await saveRefreshToken(store, newRefreshToken, envToken);
 
     const query = event.queryStringParameters || {};
     const report = query.report || 'ProfitAndLoss';
