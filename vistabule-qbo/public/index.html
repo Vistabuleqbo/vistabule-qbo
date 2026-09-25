@@ -91,7 +91,7 @@
   }
 
   /* ── KPI ROW ─────────────────────────────────────── */
-  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 4px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 4px; }
   .kpi {
     background: white;
     border: 1px solid var(--border);
@@ -350,9 +350,14 @@
       <div class="kpi-sub">Checking + savings</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Accounts Receivable</div>
+      <div class="kpi-label">Owed to You</div>
       <div class="kpi-value" id="kpi-ar"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="kpi-sub">Open invoices</div>
+      <div class="kpi-sub">Customers with a balance due</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Deposits Held</div>
+      <div class="kpi-value" id="kpi-held"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="kpi-sub">Paid toward trailers not yet finished</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Accounts Payable</div>
@@ -362,9 +367,11 @@
     <div class="kpi">
       <div class="kpi-label">Net Position</div>
       <div class="kpi-value" id="kpi-net"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="kpi-sub">Bank + AR − AP</div>
+      <div class="kpi-sub">Bank + owed to you − AP</div>
     </div>
   </div>
+
+  <div class="how-to" id="ar-note" style="display:none;margin-top:14px;"></div>
 
   <!-- REPORTS -->
   <div class="section-label">Reports — open the full report in QuickBooks</div>
@@ -537,7 +544,7 @@ async function loadAll() {
     renderProjection();
   } catch(e) {
     console.error(e);
-    ['kpi-bank','kpi-ar','kpi-ap','kpi-net','invoices-body','ar-body','ap-body','pl-body']
+    ['kpi-bank','kpi-ar','kpi-held','kpi-ap','kpi-net','invoices-body','ar-body','ap-body','pl-body']
       .forEach(id => {
         const el = document.getElementById(id);
         if (el && el.querySelector('.loading')) el.innerHTML = '<div class="error-msg">Error loading QBO data. Check token.</div>';
@@ -548,6 +555,47 @@ async function loadAll() {
 // ─────────────────────────────────────────────────────────────
 // KPIs
 // ─────────────────────────────────────────────────────────────
+// Rows in the A/R Aging report that are bookkeeping buckets, not customers. Matching is by name.
+// If QuickBooks holds deposits under differently named rows, add the name here.
+const AR_NOT_CUSTOMERS = /deposit/i;
+
+function splitAR(data) {
+  const rows = data?.Rows?.Row;
+  if (!rows) return null;
+  let owed = 0, held = 0, owedCount = 0, heldCount = 0;
+  const excluded = [];
+  rows.forEach(row => {
+    if (row.type === 'Section' || !row.ColData) return;
+    const cells = row.ColData;
+    const name = cells[0]?.value || '';
+    const total = parseFloat(cells[cells.length - 1]?.value) || 0;
+    if (!total) return;
+    if (AR_NOT_CUSTOMERS.test(name)) { excluded.push({ name, total }); return; }
+    if (total > 0) { owed += total; owedCount++; } else { held += -total; heldCount++; }
+  });
+  return { owed, held, owedCount, heldCount, excluded };
+}
+
+function renderARNote(split, qboTotal) {
+  const box = document.getElementById('ar-note');
+  if (!box || !split) return;
+  const excludedSum = split.excluded.reduce((a, r) => a + r.total, 0);
+  const gap = qboTotal - (split.owed - split.held + excludedSum);
+  box.style.display = '';
+  box.innerHTML =
+    '<div class="how-to-title">How the receivable numbers are worked out</div>' +
+    "QuickBooks' own A/R total is <strong>" + fmtFull(qboTotal) + '</strong>. That single figure nets together:' +
+    '<ul style="margin:6px 0 6px 20px;line-height:1.7;">' +
+      '<li><strong>' + fmtFull(split.owed) + '</strong> owed to you by ' + split.owedCount + ' customers (the <em>Owed to You</em> tile)</li>' +
+      '<li><strong>−' + fmtFull(split.held) + '</strong> of deposits and credits already paid by ' + split.heldCount + ' customers (the <em>Deposits Held</em> tile)</li>' +
+      (split.excluded.length ? '<li><strong>' + fmtFull(excludedSum) + '</strong> in rows that are not customers: ' +
+        split.excluded.map(r => '&ldquo;' + r.name.replace(/</g, '&lt;') + '&rdquo; (' + fmtFull(r.total) + ')').join(', ') + '</li>' : '') +
+    '</ul>' +
+    (Math.abs(gap) > 1 ? 'Unexplained difference: ' + fmtFull(gap) + '. ' : '') +
+    'Deposits are money customers have paid toward trailers you have not finished yet; you still owe them the trailer. ' +
+    'Please have your bookkeeper confirm how these deposit rows are recorded in QuickBooks.';
+}
+
 function renderKPIs() {
   const bs = qboData?.balanceSheet;
   let bank = 0, ar = 0, ap = 0;
@@ -568,13 +616,19 @@ function renderKPIs() {
       traverse(row.Rows?.Row);
     }
   }
-  const net = bank + ar - ap;
-  document.getElementById('kpi-bank').textContent = fmtFull(bank);
-  document.getElementById('kpi-ar').textContent   = fmtFull(ar);
-  document.getElementById('kpi-ap').textContent   = fmtFull(ap);
-  const netEl = document.getElementById('kpi-net');
-  netEl.textContent = fmtFull(net);
-  netEl.className   = 'kpi-value' + (net < 0 ? ' negative' : '');
+// QuickBooks' A/R total nets together what customers owe and the deposits they have paid, plus
+// bookkeeping rows that are not customers. Split it using the A/R Aging report.
+const split = splitAR(qboData?.arAging);
+const owed = split ? split.owed : ar;
+const net = bank + owed - ap;
+document.getElementById('kpi-bank').textContent = fmtFull(bank);
+document.getElementById('kpi-ar').textContent   = fmtFull(owed);
+document.getElementById('kpi-held').textContent = split ? fmtFull(split.held) : '—';
+document.getElementById('kpi-ap').textContent   = fmtFull(ap);
+const netEl = document.getElementById('kpi-net');
+netEl.textContent = fmtFull(net);
+netEl.className   = 'kpi-value' + (net < 0 ? ' negative' : '');
+renderARNote(split, ar);
   // Store for projection
   window._bankBalance = bank;
   window._arTotal = ar;
