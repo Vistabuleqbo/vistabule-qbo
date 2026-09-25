@@ -91,6 +91,20 @@
   }
 
   /* ── KPI ROW ─────────────────────────────────────── */
+.lists-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .lists-grid { grid-template-columns: 1fr; } }
+.list-scroll { max-height: 460px; overflow-y: auto; }
+.list-scroll th { position: sticky; top: 0; background: #fff; z-index: 1; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chips button { border: 1px solid var(--border); background: #fff; color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 5px 11px; border-radius: 999px; cursor: pointer; }
+.chips button.on { background: var(--forest, #1a2b1b); border-color: var(--forest, #1a2b1b); color: #fff; }
+.age { display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 8px; white-space: nowrap; }
+.age.a0 { background: #e0f2fe; color: #0369a1; }
+.age.a1 { background: #e0f2fe; color: #0369a1; }
+.age.a2 { background: #fef3c7; color: #92400e; }
+.age.a3 { background: #ffedd5; color: #c2410c; }
+.age.a4 { background: #fef2f2; color: #b91c1c; }
+.list-foot { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
   .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 4px; }
   .kpi {
     background: white;
@@ -373,6 +387,29 @@
 
   <div class="how-to" id="ar-note" style="display:none;margin-top:14px;"></div>
 
+<div class="section-label">Customer Lists — from the QuickBooks A/R Aging report</div>
+<div class="lists-grid">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Who owes you</span><span id="owed-count" style="font-family:var(--mono);font-size:11px;color:var(--muted);"></span></div>
+    <div class="card-body">
+      <div class="chips" id="owed-chips">
+        <button type="button" data-f="all" class="on">All</button>
+        <button type="button" data-f="big">$500 and over</button>
+        <button type="button" data-f="old">61+ days</button>
+      </div>
+      <div class="list-scroll" id="owed-list"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="list-foot" id="owed-foot"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Deposits held</span><span id="held-count" style="font-family:var(--mono);font-size:11px;color:var(--muted);"></span></div>
+    <div class="card-body">
+      <div class="list-scroll" id="held-list"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="list-foot">Money these customers have already paid. It is not owed to you; it is owed back as a trailer.</div>
+    </div>
+  </div>
+</div>
+
   <!-- REPORTS -->
   <div class="section-label">Reports — open the full report in QuickBooks</div>
   <div class="card">
@@ -544,7 +581,7 @@ async function loadAll() {
     renderProjection();
   } catch(e) {
     console.error(e);
-    ['kpi-bank','kpi-ar','kpi-held','kpi-ap','kpi-net','invoices-body','ar-body','ap-body','pl-body']
+    ['owed-list','held-list','kpi-bank','kpi-ar','kpi-held','kpi-ap','kpi-net','invoices-body','ar-body','ap-body','pl-body']
       .forEach(id => {
         const el = document.getElementById(id);
         if (el && el.querySelector('.loading')) el.innerHTML = '<div class="error-msg">Error loading QBO data. Check token.</div>';
@@ -562,8 +599,9 @@ const AR_NOT_CUSTOMERS = /deposit/i;
 function splitAR(data) {
   const rows = data?.Rows?.Row;
   if (!rows) return null;
+  const cols = (data.Columns?.Column || []).map(c => c.ColTitle || '');
   let owed = 0, held = 0, owedCount = 0, heldCount = 0;
-  const excluded = [];
+  const excluded = [], owedRows = [], heldRows = [];
   rows.forEach(row => {
     if (row.type === 'Section' || !row.ColData) return;
     const cells = row.ColData;
@@ -571,9 +609,11 @@ function splitAR(data) {
     const total = parseFloat(cells[cells.length - 1]?.value) || 0;
     if (!total) return;
     if (AR_NOT_CUSTOMERS.test(name)) { excluded.push({ name, total }); return; }
-    if (total > 0) { owed += total; owedCount++; } else { held += -total; heldCount++; }
+    const buckets = cells.slice(1, cells.length - 1).map(c => parseFloat(c?.value) || 0);
+    if (total > 0) { owed += total; owedCount++; owedRows.push({ name, total, buckets }); }
+    else           { held += -total; heldCount++; heldRows.push({ name, total: -total }); }
   });
-  return { owed, held, owedCount, heldCount, excluded };
+  return { owed, held, owedCount, heldCount, excluded, owedRows, heldRows, cols };
 }
 
 function renderARNote(split, qboTotal) {
@@ -596,6 +636,68 @@ function renderARNote(split, qboTotal) {
     'Please have your bookkeeper confirm how these deposit rows are recorded in QuickBooks.';
 }
 
+const escHtml = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+let _arSplit = null, _owedFilter = 'all';
+
+// Age = the oldest column that still holds money owed (Current, 1-30, 31-60, 61-90, 91+).
+function ageOf(row, cols) {
+  let idx = -1;
+  row.buckets.forEach((v, i) => { if (v > 0.005) idx = i; });
+  if (idx < 0) idx = 0;
+  const title = cols[idx + 1] || '';
+  let label;
+  if (/current/i.test(title)) label = 'Current';
+  else if (/over|\+/i.test(title)) label = '91+ days';
+  else label = title.replace(/\s*-\s*/, '–') + ' days';
+  return { idx, label, cls: 'a' + Math.min(idx, 4) };
+}
+
+function renderCustomerLists(split) {
+  if (!split) return;
+  _arSplit = split;
+  drawOwedList();
+  const held = split.heldRows.slice().sort((a, b) => b.total - a.total);
+  document.getElementById('held-count').textContent = held.length + ' customers · ' + fmtFull(split.held);
+  document.getElementById('held-list').innerHTML = held.length
+    ? '<table><thead><tr><th>Customer</th><th class="num">Paid so far</th></tr></thead><tbody>' +
+      held.map(r => '<tr><td>' + escHtml(r.name) + '</td><td class="num">' + fmtFull(r.total) + '</td></tr>').join('') +
+      '<tr class="total-row"><td>Total</td><td class="num">' + fmtFull(split.held) + '</td></tr></tbody></table>'
+    : '<div style="color:var(--muted);font-size:13px;">No deposits or credits on file.</div>';
+}
+
+function drawOwedList() {
+  const split = _arSplit;
+  if (!split) return;
+  const cols = split.cols;
+  const oldFrom = Math.max(0, cols.length - 4);      // index (in buckets) of the 61-90 column
+  let rows = split.owedRows.map(r => Object.assign({ age: ageOf(r, cols) }, r));
+  if (_owedFilter === 'big') rows = rows.filter(r => r.total >= 500);
+  if (_owedFilter === 'old') rows = rows.filter(r => r.age.idx >= oldFrom);
+  rows.sort((a, b) => b.total - a.total);
+  const shown = rows.reduce((a, r) => a + r.total, 0);
+  document.getElementById('owed-count').textContent = rows.length + ' customers · ' + fmtFull(shown);
+  document.getElementById('owed-list').innerHTML = rows.length
+    ? '<table><thead><tr><th>Customer</th><th class="num">Owes</th><th>Oldest</th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td>' + escHtml(r.name) + '</td><td class="num">' + fmtFull(r.total) +
+        '</td><td><span class="age ' + r.age.cls + '">' + r.age.label + '</span></td></tr>').join('') + '</tbody></table>'
+    : '<div style="color:var(--muted);font-size:13px;">Nobody matches this filter.</div>';
+  const allRows = split.owedRows.map(r => Object.assign({ age: ageOf(r, cols) }, r));
+  const oldSum = allRows.filter(r => r.age.idx >= oldFrom).reduce((a, r) => a + r.total, 0);
+  const oldCnt = allRows.filter(r => r.age.idx >= oldFrom).length;
+  const under = allRows.filter(r => r.total < 100).length;
+  document.getElementById('owed-foot').innerHTML =
+    'Sorted largest first. ' + fmtFull(oldSum) + ' across ' + oldCnt + ' customers is 61 days or older. ' +
+    under + ' customers owe under $100 each.';
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('#owed-chips button');
+  if (!b) return;
+  _owedFilter = b.dataset.f;
+  document.querySelectorAll('#owed-chips button').forEach(x => x.classList.toggle('on', x === b));
+  drawOwedList();
+});
+
 function renderKPIs() {
   const bs = qboData?.balanceSheet;
   let bank = 0, ar = 0, ap = 0;
@@ -616,19 +718,20 @@ function renderKPIs() {
       traverse(row.Rows?.Row);
     }
   }
-// QuickBooks' A/R total nets together what customers owe and the deposits they have paid, plus
-// bookkeeping rows that are not customers. Split it using the A/R Aging report.
-const split = splitAR(qboData?.arAging);
-const owed = split ? split.owed : ar;
-const net = bank + owed - ap;
-document.getElementById('kpi-bank').textContent = fmtFull(bank);
-document.getElementById('kpi-ar').textContent   = fmtFull(owed);
-document.getElementById('kpi-held').textContent = split ? fmtFull(split.held) : '—';
-document.getElementById('kpi-ap').textContent   = fmtFull(ap);
-const netEl = document.getElementById('kpi-net');
-netEl.textContent = fmtFull(net);
-netEl.className   = 'kpi-value' + (net < 0 ? ' negative' : '');
-renderARNote(split, ar);
+  // QuickBooks' A/R total nets together what customers owe and the deposits they have paid, plus
+  // bookkeeping rows that are not customers. Split it using the A/R Aging report.
+  const split = splitAR(qboData?.arAging);
+  const owed = split ? split.owed : ar;
+  const net = bank + owed - ap;
+  document.getElementById('kpi-bank').textContent = fmtFull(bank);
+  document.getElementById('kpi-ar').textContent   = fmtFull(owed);
+  document.getElementById('kpi-held').textContent = split ? fmtFull(split.held) : '—';
+  document.getElementById('kpi-ap').textContent   = fmtFull(ap);
+  const netEl = document.getElementById('kpi-net');
+  netEl.textContent = fmtFull(net);
+  netEl.className   = 'kpi-value' + (net < 0 ? ' negative' : '');
+  renderARNote(split, ar);
+  renderCustomerLists(split);
   // Store for projection
   window._bankBalance = bank;
   window._arTotal = ar;
